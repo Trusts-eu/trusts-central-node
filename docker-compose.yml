@@ -1,0 +1,53 @@
+version: '3'
+
+services:
+
+  broker-fuseki:
+    # image: registry.gitlab.cc-asp.fraunhofer.de:4567/eis-ids/broker-open/fuseki
+    image: registry.gitlab.cc-asp.fraunhofer.de/eis-ids/broker-open/fuseki
+    container_name: "broker-fuseki"
+    volumes:
+      - broker-fuseki:/fuseki
+    expose:
+      - "3030"
+    ports:
+      - 3030:3030
+    networks:
+      - internal-net
+
+  broker-core:
+    # image: registry.gitlab.cc-asp.fraunhofer.de:4567/eis-ids/broker-open/core
+    image: trusts/broker:5.0.0-SNAPSHOT-trusts
+    container_name: broker-core
+    volumes:
+      - ./trustshosts:/etc/hosts
+      - ./cert/:/etc/cert/
+    depends_on:
+      - broker-fuseki
+    environment:
+      - SPARQL_ENDPOINT=http://broker-fuseki:3030/connectorData
+      - ELASTICSEARCH_HOSTNAME=broker-elasticsearch
+      - SHACL_VALIDATION=true
+      - DAPS_VALIDATE_INCOMING=false
+      - COMPONENT_URI=http://broker-core:8282/
+      - COMPONENT_CATALOGURI=http://broker-core:8282/connectors/
+    ports:
+      - 8282:8080
+    expose:
+      - "8080"
+    networks:
+      ids-wide:
+        aliases:
+          - repository.aisec.fraunhofer.de
+      internal-net:
+
+
+volumes:
+    broker-fuseki:
+
+networks:
+  ids-wide:
+    external:
+      name: ids-wide
+  internal-net:
+    driver: bridge

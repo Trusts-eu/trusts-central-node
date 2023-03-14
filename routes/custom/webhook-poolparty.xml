@@ -1,0 +1,116 @@
+<routes xmlns="http://camel.apache.org/schema/spring">
+    <route id="webhook-receiver-poolparty-update">
+        <from uri="rest:post:/webhooks/poolparty/vocabulary:update?poolPartyHost={poolPartyHost}&amp;conceptScheme={conceptScheme}&amp;resourceId={resourceId}&amp;artifactId={artifactId}"></from>
+        <setHeader name="projectId">
+            <jsonpath>$.projectId</jsonpath>
+        </setHeader>
+        <log message="Received new update notification from the vocabulary service, message input: ${body}"></log>
+        <log message="The project with id ${header.projectId} on concept scheme: ${header.conceptScheme}  was updated on ${header.poolPartyHost}"></log>
+        <log message="Retrieving the updated Concept Scheme"></log>
+        <to uri="direct:poolparty-project-export"></to>
+        <log message="Updating the resource on the central DSC"></log>
+    </route>
+
+    <route id="poolparty-project-export">
+        <from uri="direct:poolparty-project-export"></from>
+        <log message="Retrieving the updated Concept Scheme..."></log>
+        <setHeader name="CamelHttpMethod">
+            <constant>POST</constant>
+        </setHeader>
+        <setBody>
+            <simple>{ "format":"Turtle", "modules": ["concepts"], "prettyPrint": true}</simple>
+        </setBody>
+        <log message="${body}"></log>
+        <setHeader name="Exchange.HTTP_URI">
+            <simple>${header.poolPartyHost}</simple>
+        </setHeader>
+        <setHeader name="Exchange.HTTP_PATH">
+            <simple>/api/projects/${header.projectId}/export</simple>
+        </setHeader>
+        <log message="${headers}"></log>
+        <to uri="http://api_url/test"></to>
+        <log message="Project Data received"></log>
+        <log message="${body}"></log>
+    </route>
+
+    <route id="webhook-receiver-sparql-endpoint-update">
+        <from uri="rest:post:/webhooks/poolparty/sparql:update?sparqlEndpoint={sparqlEndpoint}&amp;conceptScheme={conceptScheme}&amp;resourceId={resourceId}"></from>
+        <setHeader name="projectId">
+            <jsonpath>$.projectId</jsonpath>
+        </setHeader>
+        <setHeader name="hostUrl">
+            <simple>${header.host}</simple>
+        </setHeader>
+        <log message="Received new update notification from the vocabulary service, message input: ${body}"></log>
+        <log message="The project with id ${header.projectId} on concept scheme: ${header.conceptScheme} was updated."></log>
+        <log message="Retrieving the updated Concept Scheme..."></log>
+        <to uri="direct:sparql-endpoint-export"></to>
+        <log message="Updating the resource on the central DSC"></log>
+    </route>
+
+    <route id="sparql-endpoint-export">
+        <from uri="direct:sparql-endpoint-export"></from>
+        <log message="Retrieving the updated Concept Scheme...from SPARQL endpoint: ${header.sparqlEndpoint}"></log>
+        <setHeader name="CamelHttpMethod">
+            <constant>POST</constant>
+        </setHeader>
+        <setBody>
+            <simple>
+                format=text/turtle&amp;query=
+                PREFIX skos:&lt;http://www.w3.org/2004/02/skos/core#&gt;
+                construct { ?s ?p ?o }
+                where {?s a ?type . values ?type {skos:Concept skos:ConceptScheme} . ?s ?p ?o }
+            </simple>
+        </setBody>
+        <log message="${body}"></log>
+        <setHeader name="Exchange.HTTP_URI">
+            <simple>${header.sparqlEndpoint}</simple>
+        </setHeader>
+        <setHeader name="Exchange.HTTP_PATH">
+            <simple></simple>
+        </setHeader>
+        <setHeader name="DSC-Authorization">
+            <simple>${header.Authorization}</simple>
+        </setHeader>
+        <removeHeader name="Authorization">
+
+        </removeHeader>
+        <!--<setHeader name="Authorization">
+            <constant>Basic c3VwZXJhZG1pbjpGcXE4YWg2eDFhVXdLRXg=</constant>
+        </setHeader>-->
+        <setHeader name="Exchange.CONTENT_TYPE">
+            <constant>application/x-www-form-urlencoded</constant>
+        </setHeader>
+        <log message="${headers}"></log>
+        <to uri="http://api_url/test"></to>
+        <log message="Project Data received"></log>
+        <log message="Trying to update artifact data"></log>
+        <to uri="direct:vocabulary-update-artifact-data"></to>
+    </route>
+
+    <route id="vocabulary-update-artifact-data">
+        <from uri="direct:vocabulary-update-artifact-data"></from>
+        <log message="${headers}"></log>
+        <setHeader name="Authorization">
+            <simple>
+                ${header.DSC-Authorization}
+            </simple>
+        </setHeader>
+        <removeHeader name="CamelHttpQuery"></removeHeader>
+        <removeHeader name="CamelHttpUri"></removeHeader>
+        <removeHeader name="CamelHttpUrl"></removeHeader>
+        <setHeader name="CamelHttpMethod">
+            <constant>PUT</constant>
+        </setHeader>
+        <setHeader name="CamelHttpPath">
+            <simple>
+                /api/artifacts/${header.artifactId}/data
+            </simple>
+        </setHeader>
+        <log message="${headers}"></log>
+        <log message="Project Data received"></log>
+        <log message="Trying to update artifact data"></log>
+        <toD uri="http://${header.hostUrl}"></toD>
+        <log message="Artifact updated! Notifications should be sent now..."></log>
+    </route>
+</routes>
